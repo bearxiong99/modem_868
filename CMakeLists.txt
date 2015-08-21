@@ -13,7 +13,7 @@ set(COMPILE_STD
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COMMON_FLAGS} ${COMPILE_STD}")
 
 set(LD_SCRIPT_PATH "${CMAKE_SOURCE_DIR}/cmsis/ld/stm32f407.ld")
-set(SYSTEM_SRC	cmsis/startup_stm32f407.c)
+set(SYSTEM_SRC cmsis/startup_stm32f407.c)
 
 set(LINKER_FLAGS "-T${LD_SCRIPT_PATH} -Wl,--gc-sections")
 set(LINKER_FLAGS "${LINKER_FLAGS} -Wl,-Map=${PROJECT_NAME}.map")
@@ -45,12 +45,16 @@ set(ST_SRC
           stm32f4xx_spd/src/misc.c
           stm32f4xx_spd/src/stm32f4xx_gpio.c
           stm32f4xx_spd/src/stm32f4xx_rcc.c
-          stm32f4xx_spd/src/stm32f4xx_tim.c)
+          stm32f4xx_spd/src/stm32f4xx_tim.c
+          stm32f4xx_spd/src/stm32f4xx_spi.c
+          stm32f4xx_spd/src/stm32f4xx_syscfg.c
+          stm32f4xx_spd/src/stm32f4xx_exti.c)
 
 set(FIRMWARE_SRC
                 source/main.c
                 source/led.c
-                source/delay.c)
+                source/delay.c
+                source/sx1276_cfg.c)
 
 add_executable(${PROJECT_NAME} ${SYSTEM_SRC} ${ST_SRC} ${FREERTOS_SRC} ${FIRMWARE_SRC})
 
