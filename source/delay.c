@@ -25,40 +25,40 @@ static void init_timebase()
 
 static void delay_ticks(uint16_t ticks)
 {
-	uint16_t start;
-	volatile uint16_t now;
-	
-	if(ticks)
-	{
-		start = TIM_GetCounter(DELAY_TIMER);
-		
-		do
-		{
-			now = TIM_GetCounter(DELAY_TIMER);
-		} while((uint16_t)(now - start) < ticks);
-	}
+    uint16_t start;
+    volatile uint16_t now;
+
+    if(ticks)
+    {
+        start = TIM_GetCounter(DELAY_TIMER);
+
+        do
+        {
+            now = TIM_GetCounter(DELAY_TIMER);
+        } while((uint16_t)(now - start) < ticks);
+    }
 }
 
 void delay_init()
 {
-	uint32_t freq = DELAY_FREQ;
-	
-	init_timebase();
-	
-	g_tick_ms = (freq + 500) / 1000;
+    uint32_t freq = DELAY_FREQ;
+
+    init_timebase();
+    
+    g_tick_ms = (freq + 500) / 1000;
 }
 
 void delay_ms(uint32_t delay)
 {
-	uint64_t total = 0;
-	
-	total = (uint64_t)(g_tick_ms * delay);
-	
-	while(total > 60000)
-	{
-		delay_ticks(60000);
-		total -= 60000;
-	}
-	
-	delay_ticks((uint16_t)total);
+    uint64_t total = 0;
+
+    total = (uint64_t)(g_tick_ms * delay);
+
+    while(total > 60000)
+    {
+        delay_ticks(60000);
+        total -= 60000;
+    }
+    
+    delay_ticks((uint16_t)total);
 }
