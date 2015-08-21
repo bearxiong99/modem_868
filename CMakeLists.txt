@@ -44,11 +44,13 @@ set(ST_SRC
           cmsis/device/system_stm32f4xx.c
           stm32f4xx_spd/src/misc.c
           stm32f4xx_spd/src/stm32f4xx_gpio.c
-          stm32f4xx_spd/src/stm32f4xx_rcc.c)
+          stm32f4xx_spd/src/stm32f4xx_rcc.c
+          stm32f4xx_spd/src/stm32f4xx_tim.c)
 
 set(FIRMWARE_SRC
                 source/main.c
-                source/led.c)
+                source/led.c
+                source/delay.c)
 
 add_executable(${PROJECT_NAME} ${SYSTEM_SRC} ${ST_SRC} ${FREERTOS_SRC} ${FIRMWARE_SRC})
 

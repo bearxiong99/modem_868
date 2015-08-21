@@ -3,6 +3,7 @@
 
 #include "stm32f4xx.h"
 
+#include "delay.h"
 #include "led.h"
 
 static void hardware()
@@ -22,6 +23,7 @@ int main()
     hardware();
     
     led_init();
+    delay_init();
     
     xTaskCreate(task_led, "led", configMINIMAL_STACK_SIZE, NULL, 0, NULL);
 
