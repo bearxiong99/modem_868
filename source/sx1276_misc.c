@@ -1,0 +1,385 @@
+#include "sx1276_misc.h"
+#include "storage.h"
+#include "delay.h"
+
+#define SX1276_FREQUENCY_STEP       (61.03515625)
+#define SX1276_FREQUENCY_MIN        (868000000)
+#define SX1276_FREQUENCY_MAX        (915000000)
+
+#define VALUE_MIN                   SX1276_FREQUENCY_MIN
+#define VALUE_MAX                   SX1276_FREQUENCY_MAX
+#define IS_BOUNDS(VALUE)            { if(VALUE > VALUE_MAX) { VALUE = VALUE_MAX; } else if(VALUE < VALUE_MIN) { VALUE = VALUE_MIN; } }
+
+void sx1276_set_modem()
+{
+    sx1276_set_mode(sx1276_mode_sleep);
+    
+    sx1276_cfg_write(sx1276_cfg_reg_mode, 0x80);
+
+    sx1276_cfg_write(sx1276_cfg_reg_dio_map_1, 0x00);
+    sx1276_cfg_write(sx1276_cfg_reg_dio_map_2, 0x00);
+    
+    sx1276_set_mode(sx1276_mode_standby);
+}
+
+uint8_t sx1276_get_reg(uint8_t d)
+{
+    return sx1276_cfg_read(d);
+}
+
+uint32_t sx1276_get_frequency()
+{
+    uint8_t d[3];
+    uint32_t freq = 0;
+
+    sx1276_cfg_read_data(sx1276_cfg_reg_rf, &d[0], 3);
+
+    freq = ((uint32_t)d[0] << 16) |
+            ((uint32_t)d[1] << 8) |
+            ((uint32_t)d[2]);
+    freq = (uint32_t)((float)freq * (float)SX1276_FREQUENCY_STEP);
+
+    return freq;
+}
+
+void sx1276_set_frequency(uint32_t d)
+{
+    uint8_t d[3];
+    
+    IS_BOUNDS(d);
+	
+	g_storage_data.frequency = d;
+	d = (unsigned int)((float)d / (float)SX1276_FREQUENCY_STEP);
+	
+	data.msb = (unsigned int)((d >> 16) & 0xFF);
+	data.mid = (unsigned int)((d >> 8) & 0xFF);
+	data.lsb = (unsigned int)(d & 0xFF);
+	
+	sx1276_cfg_write_data(sx1276_cfg_reg_rf, &data.msb, 3);
+}
+
+static inline uint8_t st_pa_select()
+{
+	/* 525 MHz - threshold between LF and HF */
+	if(g_storage_data.frequency > 525000000)
+	{
+		/* PA boost */
+		return 0x80;
+	}
+	else
+	{
+		return 0x00;
+	}
+}
+
+void sx1276_set_power(uint8_t d)
+{
+	uint8_t pa = sx1276_cfg_read(sx1276_cfg_reg_pa);
+	uint8_t pa_dac = sx1276_cfg_read(sx1276_cfg_reg_pa_dac);
+	
+	g_storage_data.power = d;
+	pa = (pa & 0x7F) | st_pa_select();	/* HF or LF */
+	pa = (pa & 0x8F) | 0x70;		/* Max Power */
+	
+	if((pa & 0x80) == 0x80)
+	{
+		if(d > 17)
+		{
+			pa_dac = 0x87;			/* PA BOOST ON */
+			d = st_bounds_checking(d, 5, 20);
+			d -= 5;
+		}
+		else
+		{
+			pa_dac = 0x84;			/* PA BOOST OFF */
+			d = st_bounds_checking(d, 2, 17);
+			d -= 2;
+		}
+	}
+	else
+	{
+		d = st_bounds_checking(d, 0, 14);
+		d += 1;
+	}
+	
+	pa = (pa & 0xF0) | (d & 0x0F);
+	
+	sx1276_cfg_write(sx1276_cfg_reg_pa, pa);
+	sx1276_cfg_write(sx1276_cfg_reg_pa_dac, pa_dac);
+}
+
+uint8_t sx1276_get_bandwidth()
+{
+	uint8_t bw = sx1276_cfg_read(sx1276_cfg_reg_conf);
+	
+	bw = (bw & 0xF0) >> 4;
+	
+	return bw;
+}
+
+void sx1276_set_bandwidth(sx1276_bw_t d)
+{
+	uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf);
+	
+	g_storage_data.bandwidth = d;
+	
+	reg = (reg & 0x0F) | (d << 4);
+	
+	sx1276_cfg_write(sx1276_cfg_reg_conf, reg);
+}
+
+uint8_t sx1276_get_sf()
+{
+	uint8_t sp = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
+	
+	sp = (sp & 0xF0) >> 4;
+	
+	return sp;
+}
+
+void sx1276_set_sf(sx1276_sf_t d)
+{
+	uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
+	
+	g_storage_data.sf = d;
+	
+	reg = (reg & 0x0F) | (d << 4);
+	
+	sx1276_cfg_write(sx1276_cfg_reg_conf_2, reg);
+}
+
+uint8_t sx1276_get_coding_rate()
+{
+	uint8_t d = sx1276_cfg_read(sx1276_cfg_reg_conf);
+	
+	d = (d & 0x0E) >> 1;
+	
+	return d;
+}
+
+void sx1276_set_coding_rate(sx1276_rate_t d)
+{
+	uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf);
+	
+	g_storage_data.coding_rate = d;
+	
+	reg = (reg & 0xF1) | (d << 1);
+	
+	sx1276_cfg_write(sx1276_cfg_reg_conf, reg);
+}
+
+bool sx1276_get_crc()
+{
+	uint8_t crc = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
+	
+	bool ret = ((crc & 0x04) == 0x04) ? true : false;
+
+	return ret;
+}
+
+void sx1276_set_crc(bool status)
+{
+	uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
+	
+	g_storage_data.crc = status;
+	
+	reg = (reg & 0xFB) | (status << 2);
+	
+	sx1276_cfg_write(sx1276_cfg_reg_conf_2, reg);
+}
+
+uint16_t sx1276_get_preamble()
+{
+	pair_t data;
+	
+	sx1276_cfg_read_data(sx1276_cfg_reg_preamb, &data.msb, 2);
+	
+	return (((uint16_t)data.msb & 0x00FF) << 8) | data.lsb;
+}
+
+void sx1276_set_preamble(uint16_t d)
+{
+	pair_t data;
+    
+    d = st_bounds_checking(d, 0x04, 0xFFFF);
+    
+    g_storage_data.preamble = d;
+	
+	data.msb = (d >> 8) & 0xFF;
+	data.lsb = d & 0xFF;
+	
+	sx1276_cfg_write_data(sx1276_cfg_reg_preamb, &data.msb, 2);
+}
+
+bool sx1276_get_header_mode()
+{
+	uint8_t mode = sx1276_cfg_read(sx1276_cfg_reg_conf);
+	
+	bool ret = ((mode & 0x01) == 0x01) ? true : false;
+	
+	return ret;
+}
+
+void sx1276_set_header_mode(bool status)
+{
+	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_conf);
+	
+	g_storage_data.header_mode = status;
+	
+	data = (data & 0xFE) | (uint8_t)status;
+	
+	sx1276_cfg_write(sx1276_cfg_reg_conf, data);
+}
+
+uint8_t sx1276_get_hop_period()
+{
+	return sx1276_cfg_read(sx1276_cfg_reg_hop_period);
+}
+
+void sx1276_set_hop_period(uint8_t d)
+{
+	g_storage_data.hop_period = d;
+	
+	sx1276_cfg_write(sx1276_cfg_reg_hop_period, d);
+}
+
+uint8_t sx1276_get_payload()
+{
+	return sx1276_cfg_read(sx1276_cfg_reg_payload);
+}
+
+void sx1276_set_payload(uint8_t d)
+{
+	sx1276_cfg_write(sx1276_cfg_reg_payload, d);
+}
+
+uint8_t sx1276_get_rx_number()
+{
+    return sx1276_cfg_read(sx1276_cfg_reg_rx_number);
+}
+
+void sx1276_set_full_buf_tx()
+{
+	sx1276_cfg_write(sx1276_cfg_reg_tx_addr, 0);
+	sx1276_cfg_write(sx1276_cfg_reg_addr_ptr, 0);
+}
+
+void sx1276_set_full_buf_rx()
+{
+	sx1276_cfg_write(sx1276_cfg_reg_rx_addr, 0);
+	sx1276_cfg_write(sx1276_cfg_reg_addr_ptr, 0);
+}
+
+bool sx1276_get_pa_boost()
+{
+	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_pa_dac);
+	
+	bool ret = ((data & 0x07) == 0x07) ? true : false;
+	
+	return ret;
+}
+
+void sx1276_set_pa_boost(bool status)
+{
+	uint8_t pa = sx1276_cfg_read(sx1276_cfg_reg_pa_dac);
+	uint8_t pa_dac = sx1276_cfg_read(sx1276_cfg_reg_pa_dac);
+	
+	if((pa & 0x80) == 0x80)
+	{
+		if(status)
+		{
+			pa_dac = 0x87;
+		}
+	}
+	else
+	{
+		pa_dac = 0x84;
+	}
+	
+	sx1276_cfg_write(sx1276_cfg_reg_pa_dac, pa_dac);
+}
+
+uint8_t sx1276_get_pa_ramp()
+{
+	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_pa_ramp);
+	
+	return (data & 0x0F);
+}
+
+void sx1276_set_pa_ramp(sx1276_pa_ramp_t d)
+{
+	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_pa_ramp);
+	
+	data = (data & 0xF0) | (d & 0x0F);
+	
+	sx1276_cfg_write(sx1276_cfg_reg_pa_ramp, data);
+}
+
+bool sx1276_get_low_data_rate_optimize()
+{
+	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_conf_3);
+	
+	bool ret = ((data & 0x08) == 0x08) ? true : false;
+	
+	return ret;
+}
+
+void sx1276_set_low_data_rate_optimize(bool status)
+{
+	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_conf_3);
+	
+	data = (data & 0xF7) | (status << 3);
+	
+	sx1276_cfg_write(sx1276_cfg_reg_conf_3, data);
+}
+
+uint8_t sx1276_get_mode()
+{
+	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_mode);
+	
+	return (data & 0x07);
+}
+
+void sx1276_set_mode(sx1276_mode_t d)
+{
+	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_mode);
+	
+	data = (data & 0xF8) | (d & 0x07);
+	
+	sx1276_cfg_write(sx1276_cfg_reg_mode, data);
+}
+
+int32_t sx1276_get_pkt_rssi()
+{
+	return (-157 + sx1276_cfg_read(sx1276_cfg_reg_pkt_rssi));
+}
+
+int32_t sx1276_get_rssi()
+{
+	return (-157 + sx1276_cfg_read(sx1276_cfg_reg_rssi));
+}
+
+void sx1276_set_timeout(uint16_t d)
+{
+	uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
+	reg = (reg & 0xFC) | ((d >> 8) & 0x03);
+	
+	sx1276_cfg_write(sx1276_cfg_reg_conf_2, reg);
+	sx1276_cfg_write(sx1276_cfg_reg_timeout, d & 0xFF);
+}
+
+void sx1276_detect_opt()
+{
+	uint8_t d = sx1276_cfg_read(sx1276_cfg_reg_pkt_conf_2) & 0xF8;
+	
+	if(g_storage_data.sf == 6)
+	{
+		sx1276_cfg_write(sx1276_cfg_reg_pkt_conf_2, d | 0x05);
+		sx1276_cfg_write(sx1276_cfg_reg_seq_conf_2, 0x0C);
+	}
+	else
+	{
+		sx1276_cfg_write(sx1276_cfg_reg_pkt_conf_2, d | 0x03);
+		sx1276_cfg_write(sx1276_cfg_reg_seq_conf_2, 0x0A);
+	}
+}
