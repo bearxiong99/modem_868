@@ -1,14 +1,12 @@
 #include "sx1276_misc.h"
-#include "storage.h"
 #include "delay.h"
 
 #define SX1276_FREQUENCY_STEP       (61.03515625)
 #define SX1276_FREQUENCY_MIN        (868000000)
 #define SX1276_FREQUENCY_MAX        (915000000)
 
-#define VALUE_MIN                   SX1276_FREQUENCY_MIN
-#define VALUE_MAX                   SX1276_FREQUENCY_MAX
-#define IS_BOUNDS(VALUE)            { if(VALUE > VALUE_MAX) { VALUE = VALUE_MAX; } else if(VALUE < VALUE_MIN) { VALUE = VALUE_MIN; } }
+#define CHECK(VALUE, VALUE_MIN, VALUE_MIN)          { if(VALUE > VALUE_MAX) { VALUE = VALUE_MAX; } else if(VALUE < VALUE_MIN) { VALUE = VALUE_MIN; } }
+#define IS_BOUNDS(VALUE)                            CHECK(VALUE, SX1276_FREQUENCY_MIN, SX1276_FREQUENCY_MAX)
 
 void sx1276_set_modem()
 {
@@ -32,7 +30,7 @@ uint32_t sx1276_get_frequency()
     uint8_t d[3];
     uint32_t freq = 0;
 
-    sx1276_cfg_read_data(sx1276_cfg_reg_rf, &d[0], 3);
+    sx1276_cfg_read_data(sx1276_cfg_reg_rf, d, 3);
 
     freq = ((uint32_t)d[0] << 16) |
             ((uint32_t)d[1] << 8) |
@@ -44,153 +42,118 @@ uint32_t sx1276_get_frequency()
 
 void sx1276_set_frequency(uint32_t d)
 {
-    uint8_t d[3];
+    uint8_t data[3];
     
     IS_BOUNDS(d);
-	
-	g_storage_data.frequency = d;
-	d = (unsigned int)((float)d / (float)SX1276_FREQUENCY_STEP);
-	
-	data.msb = (unsigned int)((d >> 16) & 0xFF);
-	data.mid = (unsigned int)((d >> 8) & 0xFF);
-	data.lsb = (unsigned int)(d & 0xFF);
-	
-	sx1276_cfg_write_data(sx1276_cfg_reg_rf, &data.msb, 3);
-}
 
-static inline uint8_t st_pa_select()
-{
-	/* 525 MHz - threshold between LF and HF */
-	if(g_storage_data.frequency > 525000000)
-	{
-		/* PA boost */
-		return 0x80;
-	}
-	else
-	{
-		return 0x00;
-	}
+    d = (unsigned int)((float)d / (float)SX1276_FREQUENCY_STEP);
+
+    data[0] = (unsigned int)((d >> 16) & 0xFF);
+    data[3] = (unsigned int)((d >> 8) & 0xFF);
+    data[2] = (unsigned int)(d & 0xFF);
+
+    sx1276_cfg_write_data(sx1276_cfg_reg_rf, data, 3);
 }
 
 void sx1276_set_power(uint8_t d)
 {
-	uint8_t pa = sx1276_cfg_read(sx1276_cfg_reg_pa);
-	uint8_t pa_dac = sx1276_cfg_read(sx1276_cfg_reg_pa_dac);
-	
-	g_storage_data.power = d;
-	pa = (pa & 0x7F) | st_pa_select();	/* HF or LF */
-	pa = (pa & 0x8F) | 0x70;		/* Max Power */
-	
-	if((pa & 0x80) == 0x80)
-	{
-		if(d > 17)
-		{
-			pa_dac = 0x87;			/* PA BOOST ON */
-			d = st_bounds_checking(d, 5, 20);
-			d -= 5;
-		}
-		else
-		{
-			pa_dac = 0x84;			/* PA BOOST OFF */
-			d = st_bounds_checking(d, 2, 17);
-			d -= 2;
-		}
-	}
-	else
-	{
-		d = st_bounds_checking(d, 0, 14);
-		d += 1;
-	}
-	
-	pa = (pa & 0xF0) | (d & 0x0F);
-	
-	sx1276_cfg_write(sx1276_cfg_reg_pa, pa);
-	sx1276_cfg_write(sx1276_cfg_reg_pa_dac, pa_dac);
+    uint8_t pa = sx1276_cfg_read(sx1276_cfg_reg_pa);
+    uint8_t pa_dac = sx1276_cfg_read(sx1276_cfg_reg_pa_dac);
+
+    pa = (pa & 0x0F) | 0xF0;
+
+    if(d > 17)
+    {
+        pa_dac = 0x87;
+        CHECK(d, 5, 20);
+        d -= 5;
+    }
+    else
+    {
+        pa_dac = 0x84;
+        CHECK(d, 2, 17);
+        d -= 2;
+    }
+
+    pa = (pa & 0xF0) | (d & 0x0F);
+    
+    sx1276_cfg_write(sx1276_cfg_reg_pa, pa);
+    sx1276_cfg_write(sx1276_cfg_reg_pa_dac, pa_dac);
 }
 
 uint8_t sx1276_get_bandwidth()
 {
-	uint8_t bw = sx1276_cfg_read(sx1276_cfg_reg_conf);
-	
-	bw = (bw & 0xF0) >> 4;
-	
-	return bw;
+    uint8_t d = sx1276_cfg_read(sx1276_cfg_reg_conf);
+    
+    return ((d & 0xF0) >> 4);
 }
 
 void sx1276_set_bandwidth(sx1276_bw_t d)
 {
-	uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf);
-	
-	g_storage_data.bandwidth = d;
-	
-	reg = (reg & 0x0F) | (d << 4);
-	
-	sx1276_cfg_write(sx1276_cfg_reg_conf, reg);
+    uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf);
+
+    reg = (reg & 0x0F) | (d << 4);
+
+    sx1276_cfg_write(sx1276_cfg_reg_conf, reg);
 }
 
 uint8_t sx1276_get_sf()
 {
-	uint8_t sp = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
-	
-	sp = (sp & 0xF0) >> 4;
-	
-	return sp;
+    uint8_t sp = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
+
+    return ((sp & 0xF0) >> 4);
 }
 
 void sx1276_set_sf(sx1276_sf_t d)
 {
-	uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
-	
-	g_storage_data.sf = d;
-	
-	reg = (reg & 0x0F) | (d << 4);
-	
-	sx1276_cfg_write(sx1276_cfg_reg_conf_2, reg);
+    uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
+
+    g_storage_data.sf = d;
+
+    reg = (reg & 0x0F) | (d << 4);
+
+    sx1276_cfg_write(sx1276_cfg_reg_conf_2, reg);
 }
 
 uint8_t sx1276_get_coding_rate()
 {
-	uint8_t d = sx1276_cfg_read(sx1276_cfg_reg_conf);
-	
-	d = (d & 0x0E) >> 1;
-	
-	return d;
+    uint8_t d = sx1276_cfg_read(sx1276_cfg_reg_conf);
+
+    return ((d & 0x0E) >> 1);
 }
 
 void sx1276_set_coding_rate(sx1276_rate_t d)
 {
-	uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf);
-	
-	g_storage_data.coding_rate = d;
-	
-	reg = (reg & 0xF1) | (d << 1);
-	
-	sx1276_cfg_write(sx1276_cfg_reg_conf, reg);
+    uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf);
+
+    g_storage_data.coding_rate = d;
+
+    reg = (reg & 0xF1) | (d << 1);
+
+    sx1276_cfg_write(sx1276_cfg_reg_conf, reg);
 }
 
 bool sx1276_get_crc()
 {
-	uint8_t crc = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
-	
-	bool ret = ((crc & 0x04) == 0x04) ? true : false;
+    uint8_t crc = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
 
-	return ret;
+    return (((crc & 0x04) == 0x04) ? true : false);
 }
 
 void sx1276_set_crc(bool status)
 {
-	uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
-	
-	g_storage_data.crc = status;
-	
-	reg = (reg & 0xFB) | (status << 2);
-	
-	sx1276_cfg_write(sx1276_cfg_reg_conf_2, reg);
+    uint8_t reg = sx1276_cfg_read(sx1276_cfg_reg_conf_2);
+
+    g_storage_data.crc = status;
+
+    reg = (reg & 0xFB) | (status << 2);
+
+    sx1276_cfg_write(sx1276_cfg_reg_conf_2, reg);
 }
 
 uint16_t sx1276_get_preamble()
 {
-	pair_t data;
+	uint8_t data[2];
 	
 	sx1276_cfg_read_data(sx1276_cfg_reg_preamb, &data.msb, 2);
 	
@@ -297,22 +260,6 @@ void sx1276_set_pa_boost(bool status)
 	}
 	
 	sx1276_cfg_write(sx1276_cfg_reg_pa_dac, pa_dac);
-}
-
-uint8_t sx1276_get_pa_ramp()
-{
-	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_pa_ramp);
-	
-	return (data & 0x0F);
-}
-
-void sx1276_set_pa_ramp(sx1276_pa_ramp_t d)
-{
-	uint8_t data = sx1276_cfg_read(sx1276_cfg_reg_pa_ramp);
-	
-	data = (data & 0xF0) | (d & 0x0F);
-	
-	sx1276_cfg_write(sx1276_cfg_reg_pa_ramp, data);
 }
 
 bool sx1276_get_low_data_rate_optimize()

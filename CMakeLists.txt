@@ -54,7 +54,8 @@ set(FIRMWARE_SRC
                 source/main.c
                 source/led.c
                 source/delay.c
-                source/sx1276_cfg.c)
+                source/sx1276_cfg.c
+                source/sx1276_misc.c)
 
 add_executable(${PROJECT_NAME} ${SYSTEM_SRC} ${ST_SRC} ${FREERTOS_SRC} ${FIRMWARE_SRC})
 

@@ -103,10 +103,6 @@ bool sx1276_get_pa_boost();
 
 void sx1276_set_pa_boost(bool status);
 
-uint8_t sx1276_get_pa_ramp();
-
-void sx1276_set_pa_ramp(sx1276_pa_ramp_t d);
-
 bool sx1276_get_low_data_rate_optimize();
 
 void sx1276_set_low_data_rate_optimize(bool status);
