@@ -5,7 +5,7 @@
 #define SX1276_FREQUENCY_MIN        (868000000)
 #define SX1276_FREQUENCY_MAX        (915000000)
 
-#define CHECK(VALUE, VALUE_MIN, VALUE_MIN)          { if(VALUE > VALUE_MAX) { VALUE = VALUE_MAX; } else if(VALUE < VALUE_MIN) { VALUE = VALUE_MIN; } }
+#define CHECK(VALUE, VALUE_MIN, VALUE_MAX)          { if(VALUE > VALUE_MAX) { VALUE = VALUE_MAX; } else if(VALUE < VALUE_MIN) { VALUE = VALUE_MIN; } }
 #define IS_BOUNDS(VALUE)                            CHECK(VALUE, SX1276_FREQUENCY_MIN, SX1276_FREQUENCY_MAX)
 
 void sx1276_set_modem()
